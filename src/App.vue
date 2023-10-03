@@ -10,50 +10,33 @@
   <BabylonJsScene />
 </template>
 
-<script lang="ts">
-import { computed, defineComponent, ref } from "vue";
+<script setup lang="ts">
+import { computed, ref } from "vue";
 import BabylonJsScene from "./components/BabylonJsSceneComponent.vue";
 import { MySceneDirector } from "./director/MySceneDirector";
 
-export default defineComponent({
-  name: "App",
-  components: {
-    BabylonJsScene,
-  },
-  setup() {
-    const sceneDirector = new MySceneDirector();
-
-    const name = ref("");
-
-    const selectedMarbleNameLabel = computed(() => {
-      return selectedMarbleName.value !== ""
-        ? selectedMarbleName.value
-        : "Click on a marble";
-    });
-
-    const selectedMarbleName = sceneDirector.useSelectedMarbleName();
-
-    const addMarble = async () => {
-      void sceneDirector.addMarble(name.value);
-    };
-    const clearMarbles = async () => {
-      void sceneDirector.clearMarbles();
-    };
-    const getMeshNames = async () => {
-      const names = await sceneDirector.getMeshNames();
-      console.log("Mesh names:", names);
-    };
-
-    return {
-      name,
-      addMarble,
-      clearMarbles,
-      getMeshNames,
-      selectedMarbleName,
-      selectedMarbleNameLabel,
-    };
-  },
+const sceneDirector = new MySceneDirector();
+const name = ref("");
+const selectedMarbleNameLabel = computed(() => {
+  return selectedMarbleName.value !== ""
+    ? selectedMarbleName.value
+    : "Click on a marble";
 });
+
+const selectedMarbleName = sceneDirector.useSelectedMarbleName();
+
+const addMarble = async () => {
+  void sceneDirector.addMarble(name.value);
+};
+
+const clearMarbles = async () => {
+  void sceneDirector.clearMarbles();
+};
+
+const getMeshNames = async () => {
+  const names = await sceneDirector.getMeshNames();
+  console.log("Mesh names:", names);
+};
 </script>
 
 <style>
