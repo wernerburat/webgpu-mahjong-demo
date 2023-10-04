@@ -2,7 +2,6 @@ import {
   Scene,
   Vector3,
   Color3,
-  HemisphericLight,
   Mesh,
   IPointerEvent,
   PickingInfo,
@@ -18,8 +17,6 @@ import {
   HavokPlugin,
   PhysicsShapeType,
   PhysicsAggregate,
-  Color4,
-  VertexBuffer,
 } from "@babylonjs/core";
 
 import { GLTFFileLoader } from "@babylonjs/loaders";
@@ -93,17 +90,18 @@ export class MahjongScene {
     let nTile = tileParent.getChildMeshes()[0] as Mesh;
     nTile.name = "prefab-tile";
 
-    // Material
-    //const material = this.createMarbleMaterial();
-
     // Standard Material
-    const newMaterial = new StandardMaterial("newMaterial", this._scene);
-    newMaterial.diffuseColor = new Color3(0.6, 0.6, 0.6);
-    newMaterial.specularColor = new Color3(1, 1, 1);
-    newMaterial.emissiveColor = new Color3(0.6, 0.6, 0.6);
-    newMaterial.alpha = 0.5;
-    newMaterial.backFaceCulling = false;
-    nTile.material = newMaterial;
+    // const newMaterial = new StandardMaterial("newMaterial", this._scene);
+    // newMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5);
+    // newMaterial.specularColor = new Color3(0.9, 1, 0.9);
+    // newMaterial.emissiveColor = new Color3(0.6, 0.6, 0.6);
+    // newMaterial.alpha = 1;
+    // newMaterial.backFaceCulling = true;
+    // nTile.material = newMaterial;
+
+    // Material
+    const material = this.createMarbleMaterial();
+    nTile.material = material;
 
     // Position
     nTile.position = new Vector3(0, 5, 0);
@@ -113,8 +111,8 @@ export class MahjongScene {
     nTile.scaling = new Vector3(scale, scale, scale);
 
     // Shadows
-    //nTile.receiveShadows = true;
-    //this.shadowGenerator?.addShadowCaster(nTile);
+    nTile.receiveShadows = true;
+    this.shadowGenerator?.addShadowCaster(nTile);
 
     nTile.setEnabled(false);
 
@@ -136,9 +134,13 @@ export class MahjongScene {
       "./tiles/materials/marble/ao_map.jpg",
       this._scene
     );
-    material.metallic = 0.3;
-    material.roughness = 0.3;
-    material.albedoColor = new Color3(0.6, 0.2, 0.2);
+    material.metallic = 0;
+    material.roughness = 0.1;
+    material.albedoColor = new Color3(1, 1, 1);
+    material.reflectivityColor = new Color3(0.5, 0.5, 0.5);
+    material.microSurface = 1;
+    material.reflectionColor = new Color3(0.5, 0.5, 0.5);
+    material.metallicReflectanceColor = new Color3(0.5, 0.5, 0.5);
     return material;
   }
 
@@ -156,28 +158,35 @@ export class MahjongScene {
 
       // Clone and position tile next to a tile where there is space available
       const tile = this.tilePrefab.clone(`tile-${tileId}`);
-
       tile.position = tile.position.add(Vector3.Right().scale(10 * tileCount));
-      console.log(tile.position);
 
       // Texture decal
       const decalMaterial = new StandardMaterial("decalMat", this._scene);
+      let tileCode = 31;
+      if (sceneDirectorCommand?.payload) {
+        tileCode = sceneDirectorCommand.payload;
+      }
+      const tileName = tiles[tileCode];
       decalMaterial.diffuseTexture = new Texture(
-        "./tiles/textures/Man1.png",
+        `./tiles/textures/${tileName}.png`,
         this._scene
       );
       decalMaterial.diffuseTexture.hasAlpha = true;
+      const goldColor = new Color3(0.9, 0.8, 0.1);
+      decalMaterial.specularColor = goldColor;
+      decalMaterial.backFaceCulling = true;
 
+      const scale = 0.8;
       const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
         position: tile.absolutePosition,
         normal: Vector3.Up(),
-        size: new Vector3(8, 10, 10),
+        size: new Vector3(8 * scale, 10 * scale, 10 * scale),
         angle: Math.PI / 2,
         localMode: true,
         cullBackFaces: true,
       });
       decal.material = decalMaterial.clone(`decal-${tileId}-material`);
-      decal.material.zOffset = 0.1;
+      decal.material.zOffset = -0.2;
 
       tile.setEnabled(true);
       this.shadowGenerator?.addShadowCaster(tile);
@@ -242,7 +251,7 @@ export class MahjongScene {
 
   private createLight(scene: Scene) {
     const light = new DirectionalLight("dir01", new Vector3(1, -1, 1), scene);
-    light.position = new Vector3(-10, 20, -10);
+    light.position = new Vector3(-50, 20, -50);
     light.intensity = 1;
     return light;
   }

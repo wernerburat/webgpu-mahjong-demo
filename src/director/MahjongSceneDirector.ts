@@ -35,8 +35,8 @@ export class MahjongSceneDirector extends BaseSceneDirector {
     return retvalue;
   }
 
-  async addTile() {
-    void this.asyncCommand(SceneDirectorEventBusMessages.AddTile);
+  async addTile(code: number) {
+    void this.asyncCommand(SceneDirectorEventBusMessages.AddTile, code);
   }
 
   // Vue reactive stuff
