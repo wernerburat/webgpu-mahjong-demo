@@ -1,45 +1,45 @@
 <template>
-  <div style="width: 100%; height: 40px">
-    <input type="text" v-model="name" />
-    <button @click="addMarble">Add marble</button>
-    <button @click="clearMarbles">Remove marbles</button>
-    <button @click="getMeshNames">Console.log scene mesh names</button>
-    <br />
-    SelectedMarbleName: {{ selectedMarbleNameLabel }}
+  <div class="menu">
+    <button @click="marbles">Marbles</button>
+    <button @click="mahjong">Mahjong</button>
+    <button @click="secret">Secret</button>
   </div>
-  <BabylonJsScene />
+  <Marbles v-if="showMarbles"></Marbles>
+  <Mahjong v-if="showMahjong"></Mahjong>
+  <Secret v-if="showSecret"></Secret>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import BabylonJsScene from "./components/BabylonJsSceneComponent.vue";
-import { MySceneDirector } from "./director/MySceneDirector";
+import Marbles from "./views/MarblesView.vue";
+import Mahjong from "./views/MahjongView.vue";
+import Secret from "./views/SecretView.vue";
 
-const sceneDirector = new MySceneDirector();
-const name = ref("");
-const selectedMarbleNameLabel = computed(() => {
-  return selectedMarbleName.value !== ""
-    ? selectedMarbleName.value
-    : "Click on a marble";
-});
+import { ref } from "vue";
 
-const selectedMarbleName = sceneDirector.useSelectedMarbleName();
+const showMarbles = ref(false);
+const showMahjong = ref(false);
+const showSecret = ref(false);
 
-const addMarble = async () => {
-  void sceneDirector.addMarble(name.value);
+const marbles = () => {
+  showMarbles.value = true;
+  showMahjong.value = false;
+  showSecret.value = false;
 };
 
-const clearMarbles = async () => {
-  void sceneDirector.clearMarbles();
+const mahjong = () => {
+  showMarbles.value = false;
+  showMahjong.value = true;
+  showSecret.value = false;
 };
 
-const getMeshNames = async () => {
-  const names = await sceneDirector.getMeshNames();
-  console.log("Mesh names:", names);
+const secret = () => {
+  showMarbles.value = false;
+  showMahjong.value = false;
+  showSecret.value = true;
 };
 </script>
 
-<style>
+<style scoped>
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -47,5 +47,23 @@ const getMeshNames = async () => {
   text-align: center;
   color: #2c3e50;
   margin-top: 60px;
+}
+
+.menu {
+  width: 100%;
+  height: 40px;
+  margin-bottom: 20px;
+}
+
+button {
+  background-color: #4caf50;
+  border: none;
+  color: white;
+  padding: 15px 32px;
+}
+
+button:hover {
+  background-color: #3e8e41;
+  cursor: pointer;
 }
 </style>

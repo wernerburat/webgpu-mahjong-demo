@@ -5,7 +5,7 @@ import {
 } from "../bus/events";
 import { BaseSceneDirector } from "./BaseSceneDirector";
 
-export class MySceneDirector extends BaseSceneDirector {
+export class SecretSceneDirector extends BaseSceneDirector {
   private _selectedMarbleName = ref("");
 
   constructor() {

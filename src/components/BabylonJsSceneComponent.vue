@@ -4,26 +4,28 @@
 
 <script lang="ts" setup>
 import { MarbleScene } from "../scenes/MarbleScene";
-import { BusFactory } from "../bus/BusFactory";
+import { MahjongScene } from "../scenes/MahjongScene";
+import { SecretScene } from "../scenes/SecretScene";
 import { onMounted, onUnmounted, ref, defineProps } from "vue";
 
-defineProps({
-  msg: String,
+const props = defineProps({
+  scene: {
+    type: MarbleScene || MahjongScene || SecretScene,
+    required: true,
+  },
 });
 
-const bus = BusFactory.getBus();
 const bjsCanvasRef = ref(null);
-const myScene = new MarbleScene(bus);
 
 onMounted(() => {
   const bjsCanvas = bjsCanvasRef.value;
   if (bjsCanvas) {
-    myScene.createScene(bjsCanvas);
-    myScene.registerBusEvents();
+    props.scene.createScene(bjsCanvas);
+    props.scene.registerBusEvents();
   }
 });
 
 onUnmounted(() => {
-  myScene.unregisterBusEvents();
+  props.scene.unregisterBusEvents();
 });
 </script>
