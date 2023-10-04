@@ -14,6 +14,12 @@ import {
   MeshBuilder,
   ShadowGenerator,
   DirectionalLight,
+  StandardMaterial,
+  HavokPlugin,
+  PhysicsShapeType,
+  PhysicsAggregate,
+  Color4,
+  VertexBuffer,
 } from "@babylonjs/core";
 
 import { GLTFFileLoader } from "@babylonjs/loaders";
@@ -88,6 +94,34 @@ export class MahjongScene {
     nTile.name = "prefab-tile";
 
     // Material
+    //const material = this.createMarbleMaterial();
+
+    // Standard Material
+    const newMaterial = new StandardMaterial("newMaterial", this._scene);
+    newMaterial.diffuseColor = new Color3(0.6, 0.6, 0.6);
+    newMaterial.specularColor = new Color3(1, 1, 1);
+    newMaterial.emissiveColor = new Color3(0.6, 0.6, 0.6);
+    newMaterial.alpha = 0.5;
+    newMaterial.backFaceCulling = false;
+    nTile.material = newMaterial;
+
+    // Position
+    nTile.position = new Vector3(0, 5, 0);
+
+    // Scale
+    const scale = 0.5;
+    nTile.scaling = new Vector3(scale, scale, scale);
+
+    // Shadows
+    //nTile.receiveShadows = true;
+    //this.shadowGenerator?.addShadowCaster(nTile);
+
+    nTile.setEnabled(false);
+
+    return nTile;
+  }
+
+  private createMarbleMaterial() {
     const material = new PBRMaterial("tileMaterial", this._scene);
     material.albedoTexture = new Texture(
       "./tiles/materials/marble/color_map.jpg",
@@ -102,35 +136,19 @@ export class MahjongScene {
       "./tiles/materials/marble/ao_map.jpg",
       this._scene
     );
-    material.metallic = 0.5;
-    material.roughness = 0.5;
-
-    nTile.material = material;
-
-    // Position
-    nTile.position = new Vector3(0, 5, 0);
-
-    // Scale
-    const scale = 0.5;
-    nTile.scaling = new Vector3(scale, scale, scale);
-
-    // Shadows
-    nTile.receiveShadows = true;
-    this.shadowGenerator?.addShadowCaster(nTile);
-
-    nTile.setEnabled(false);
-
-    return nTile;
+    material.metallic = 0.3;
+    material.roughness = 0.3;
+    material.albedoColor = new Color3(0.6, 0.2, 0.2);
+    return material;
   }
 
-  addTile(sceneDirectorCommand: SceneDirectorCommand) {
+  addTile(sceneDirectorCommand?: SceneDirectorCommand) {
     if (this._scene && this.tilePrefab) {
       // Compute new tile ID from number of existing tiles
       const tileId = this._scene.meshes
         .filter((m) => m.name.startsWith("tile"))
         .length.toString();
 
-      console.log("tileId", tileId);
       // Get amount of tiles
       const tileCount = this._scene.meshes.filter((m) =>
         m.name.startsWith("tile")
@@ -145,7 +163,31 @@ export class MahjongScene {
 
       tile.setEnabled(true);
       this.shadowGenerator?.addShadowCaster(tile);
-      this.commandFinished(sceneDirectorCommand);
+
+      // Texture decal
+      const decalMaterial = new StandardMaterial(
+        `decal-${tileId}`,
+        this._scene
+      );
+
+      decalMaterial.diffuseTexture = new Texture(
+        "./tiles/textures/Man1.png",
+        this._scene
+      );
+      decalMaterial.diffuseTexture.hasAlpha = true;
+      const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
+        position: tile.position.add(new Vector3(0, 0.1, 0)),
+        normal: new Vector3(0, 1, 0),
+        size: new Vector3(8, 10, 10),
+        angle: Math.PI / 2,
+      });
+      decal.material = decalMaterial;
+
+      console.log(decal.position);
+
+      if (sceneDirectorCommand) {
+        this.commandFinished(sceneDirectorCommand);
+      }
     }
   }
 
@@ -155,17 +197,22 @@ export class MahjongScene {
   }
 
   // create the BabylonJS scene
-  async createScene(engine: WebGPUEngine, canvas: HTMLCanvasElement) {
+  async createScene(
+    engine: WebGPUEngine,
+    canvas: HTMLCanvasElement,
+    hk: HavokPlugin
+  ) {
     const scene = new Scene(engine);
+    scene.enablePhysics(new Vector3(0, -9.81, 0), hk);
     this._scene = scene;
-
     // Lights
     const light = this.createLight(scene);
 
     // Shadows
     this.shadowGenerator = new ShadowGenerator(1024, light);
+    this.shadowGenerator.usePoissonSampling = true;
 
-    // Tile prefab
+    // Tile prefab (after shadows to avoid no shadow caster)
     this.tilePrefab = await this.newTilePrefab();
 
     // Ground
@@ -186,6 +233,9 @@ export class MahjongScene {
       camera.alpha += 0.001;
     });
 
+    // Spawn a first tile
+    this.addTile();
+
     engine.runRenderLoop(() => {
       scene.render();
     });
@@ -194,8 +244,8 @@ export class MahjongScene {
   }
 
   private createLight(scene: Scene) {
-    const light = new DirectionalLight("dir01", new Vector3(-1, -1, -1), scene);
-    light.position = new Vector3(0, 20, 0);
+    const light = new DirectionalLight("dir01", new Vector3(1, -1, 1), scene);
+    light.position = new Vector3(-10, 20, -10);
     light.intensity = 1;
     return light;
   }
@@ -203,9 +253,9 @@ export class MahjongScene {
   private createCamera(scene: Scene) {
     const camera = new ArcRotateCamera(
       "camera1",
-      1,
-      0.4,
-      40,
+      0.5,
+      0.8,
+      60,
       new Vector3(0, 0, 0),
       scene
     );
@@ -214,15 +264,23 @@ export class MahjongScene {
   }
 
   private createGround(scene: Scene) {
+    // Mesh
     const ground = MeshBuilder.CreateGround(
       "ground",
       { width: 100, height: 100 },
       scene
     );
-    const groundMat = new PBRMaterial("groundMat", scene);
-    groundMat.albedoColor = new Color3(0.05, 0.25, 0.05);
-    groundMat.metallic = 0.1;
-    groundMat.roughness = 0.5;
+
+    // Physics
+    new PhysicsAggregate(ground, PhysicsShapeType.BOX, {
+      mass: 0,
+      restitution: 0.1,
+    });
+
+    // Material
+    const groundMat = new StandardMaterial("groundMat", scene);
+    groundMat.diffuseColor = new Color3(0.15, 0.4, 0.15);
+    groundMat.specularColor = new Color3(0, 0, 0);
     ground.material = groundMat;
     ground.receiveShadows = true;
   }

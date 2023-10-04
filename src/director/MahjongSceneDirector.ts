@@ -36,7 +36,6 @@ export class MahjongSceneDirector extends BaseSceneDirector {
   }
 
   async addTile() {
-    console.log("suc");
     void this.asyncCommand(SceneDirectorEventBusMessages.AddTile);
   }
 

@@ -3,11 +3,13 @@
 </template>
 
 <script lang="ts" setup>
+import HavokPhysics from "@babylonjs/havok";
+
 import { MarbleScene } from "../scenes/MarbleScene";
 import { MahjongScene } from "../scenes/MahjongScene";
 import { SecretScene } from "../scenes/SecretScene";
 import { onMounted, onUnmounted, ref, defineProps } from "vue";
-import { WebGPUEngine } from "@babylonjs/core";
+import { WebGPUEngine, HavokPlugin } from "@babylonjs/core";
 
 const props = defineProps({
   scene: {
@@ -23,8 +25,10 @@ onMounted(() => {
   const engine = new WebGPUEngine(bjsCanvasRef.value!);
   const bjsCanvas = bjsCanvasRef.value;
   if (bjsCanvas) {
-    engine.initAsync().then(() => {
-      props.scene.createScene(engine, bjsCanvas);
+    engine.initAsync().then(async () => {
+      const havokInstance = await HavokPhysics();
+      const hk = new HavokPlugin(true, havokInstance);
+      props.scene.createScene(engine, bjsCanvas, hk);
     });
   }
 });
