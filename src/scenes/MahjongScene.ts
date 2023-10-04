@@ -1,16 +1,18 @@
 import {
-  Engine,
   Scene,
-  FreeCamera,
   Vector3,
   HemisphericLight,
   Mesh,
   IPointerEvent,
   PickingInfo,
   ArcRotateCamera,
-  StandardMaterial,
-  Color3,
+  SceneLoader,
+  PBRMaterial,
+  Texture,
+  WebGPUEngine,
 } from "@babylonjs/core";
+
+import { GLTFFileLoader } from "@babylonjs/loaders";
 
 import { AsyncBus } from "../bus/AsyncBus";
 import { IMessageBus } from "../bus/BusFactory";
@@ -20,10 +22,10 @@ import {
 } from "../bus/events";
 import { SceneDirectorCommand } from "../director/BaseSceneDirector";
 import { reviver } from "../utils/json";
-import { names } from "./names";
 
 export class MahjongScene {
   private _scene?: Scene;
+  private tilePrefab?: Mesh;
 
   constructor(private _eventBus: IMessageBus) {}
 
@@ -58,60 +60,59 @@ export class MahjongScene {
 
   // which messages you want to react to
   getMessagesToActionsMapping() {
+    console.log("aaa");
     const messagesToActions = new Map<string, (payload: any) => void>();
-    messagesToActions.set(
-      SceneDirectorEventBusMessages.ClearMarbles,
-      this.clearMarbles
-    );
-    messagesToActions.set(
-      SceneDirectorEventBusMessages.AddMarble,
-      this.addMarble
-    );
-    messagesToActions.set(
-      SceneDirectorEventBusMessages.GetMeshNames,
-      this.getSceneMeshNames
-    );
+    messagesToActions.set(SceneDirectorEventBusMessages.AddTile, this.addTile);
+
     return messagesToActions;
   }
 
-  // every method receives a SceneDirectorCommand object
-  addMarble(sceneDirectorCommand: SceneDirectorCommand) {
-    // the parameters are stored in the payload property
-    const name = <string>sceneDirectorCommand.payload;
-    this.addMarbleByName(name);
+  async newTilePrefab() {
+    new GLTFFileLoader();
+    let tile = await Promise.resolve(
+      SceneLoader.ImportMeshAsync(
+        "",
+        "./tiles/models/",
+        "JogneTuil.gltf",
+        this._scene
+      )
+    );
 
-    // you must call this method when your command has finished executing
-    this.commandFinished(sceneDirectorCommand);
+    let tileParent = tile.meshes[0];
+    let nTile = tileParent.getChildMeshes()[0] as Mesh;
+
+    // Material
+    const material = new PBRMaterial("tileMaterial", this._scene);
+    material.albedoTexture = new Texture(
+      "./tiles/materials/marble/color_map.jpg",
+      this._scene
+    );
+    material.bumpTexture = new Texture(
+      "./tiles/materials/marble/normal_map_opengl.jpg",
+      this._scene
+    );
+
+    material.ambientTexture = new Texture(
+      "./tiles/materials/marble/ao_map.jpg",
+      this._scene
+    );
+    material.metallic = 0.5;
+    material.roughness = 0.5;
+
+    nTile.material = material;
+    nTile.setEnabled(true);
+    console.log(nTile);
+    return nTile;
   }
 
-  addMarbleByName(name: string, precreated = false) {
-    if (this._scene) {
-      const marbleFullName = `marble-${name}`;
-      const mesh = Mesh.CreateSphere(marbleFullName, 16, 2, this._scene);
-      mesh.position.x = Math.random() * 6 - 3;
-      mesh.position.y = Math.random() * 6 - 3;
-      mesh.position.z = Math.random() * 6 - 3;
-      mesh.isPickable = true;
-
-      const material = new StandardMaterial(marbleFullName, this._scene);
-      material.diffuseColor = precreated
-        ? new Color3(Math.random(), 0, 1)
-        : new Color3(1, Math.random(), 0);
-
-      mesh.material = material;
+  addTile(sceneDirectorCommand: SceneDirectorCommand) {
+    console.log("monke");
+    if (this._scene && this.tilePrefab) {
+      const tile = this.tilePrefab.clone("til");
+      tile.setEnabled(true);
+      tile.position = new Vector3(0, 0, 0);
+      this.commandFinished(sceneDirectorCommand);
     }
-  }
-
-  clearMarbles(sceneDirectorCommand: SceneDirectorCommand) {
-    if (this._scene) {
-      this._scene.meshes.forEach((m) => {
-        if (m.name.startsWith("marble")) {
-          m.dispose();
-        }
-      });
-    }
-
-    this.commandFinished(sceneDirectorCommand);
   }
 
   getSceneMeshNames(sceneDirectorCommand: SceneDirectorCommand) {
@@ -120,16 +121,16 @@ export class MahjongScene {
   }
 
   // create the BabylonJS scene
-  createScene(canvas: HTMLCanvasElement) {
-    const engine = new Engine(canvas);
+  async createScene(engine: WebGPUEngine, canvas: HTMLCanvasElement) {
     const scene = new Scene(engine);
     this._scene = scene;
+    this.tilePrefab = await this.newTilePrefab();
 
     const camera = new ArcRotateCamera(
       "camera1",
       1,
       0.4,
-      20,
+      40,
       new Vector3(0, 0, 0),
       scene
     );
@@ -140,7 +141,7 @@ export class MahjongScene {
 
     this._scene.onPointerDown = (evt: IPointerEvent, pickInfo: PickingInfo) => {
       this.emitCommand(
-        SceneEventBusMessages.MarbleSelected,
+        SceneEventBusMessages.TileSelected,
         pickInfo?.pickedMesh?.name
       );
     };
@@ -148,12 +149,6 @@ export class MahjongScene {
     this._scene.onBeforeRenderObservable.add(() => {
       camera.alpha += 0.001;
     });
-
-    for (let i = 0; i < 40; i++) {
-      this.addMarbleByName(names[i], true);
-    }
-
-    //
 
     engine.runRenderLoop(() => {
       scene.render();

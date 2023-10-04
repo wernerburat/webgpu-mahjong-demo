@@ -1,0 +1,15 @@
+{
+  "prompt_text": "Carrara marble, grey marble, natural stone, natural granite, fine detail",
+  "seamless_prompt_text": "Carrara marble, grey marble, natural stone, natural granite, fine detail",
+  "seamless_patch_scale": 0.8,
+  "upscale_prompt_text": "Carrara marble, white marble, natural stone, natural granite, fine detail",
+  "upscale_resolution": 2048,
+  "is_seamless": true,
+  "pbr_mode": "polished",
+  "pbr_generate_color": false,
+  "pbr_generate_normal": true,
+  "pbr_generate_height": false,
+  "pbr_generate_ao": true,
+  "pbr_generate_roughness": true,
+  "pbr_generate_metallic": false
+}

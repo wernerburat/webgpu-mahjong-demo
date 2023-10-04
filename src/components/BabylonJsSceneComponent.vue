@@ -7,10 +7,11 @@ import { MarbleScene } from "../scenes/MarbleScene";
 import { MahjongScene } from "../scenes/MahjongScene";
 import { SecretScene } from "../scenes/SecretScene";
 import { onMounted, onUnmounted, ref, defineProps } from "vue";
+import { WebGPUEngine } from "@babylonjs/core";
 
 const props = defineProps({
   scene: {
-    type: MarbleScene || MahjongScene || SecretScene,
+    type: MahjongScene || MarbleScene || SecretScene,
     required: true,
   },
 });
@@ -18,10 +19,13 @@ const props = defineProps({
 const bjsCanvasRef = ref(null);
 
 onMounted(() => {
+  props.scene.registerBusEvents();
+  const engine = new WebGPUEngine(bjsCanvasRef.value!);
   const bjsCanvas = bjsCanvasRef.value;
   if (bjsCanvas) {
-    props.scene.createScene(bjsCanvas);
-    props.scene.registerBusEvents();
+    engine.initAsync().then(() => {
+      props.scene.createScene(engine, bjsCanvas);
+    });
   }
 });
 
