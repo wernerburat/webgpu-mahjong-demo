@@ -17,7 +17,7 @@ import Secret from "./views/SecretView.vue";
 import { ref } from "vue";
 
 const showMarbles = ref(false);
-const showMahjong = ref(false);
+const showMahjong = ref(true);
 const showSecret = ref(false);
 
 const marbles = () => {
