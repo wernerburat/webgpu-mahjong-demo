@@ -1,4 +1,8 @@
-export const tiles = {
+interface Tiles {
+  [key: number]: string;
+}
+
+export const tiles: Tiles = {
   0: "Man5-Dora",
   1: "Man1",
   2: "Man2",

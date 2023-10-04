@@ -104,7 +104,7 @@ export class MahjongScene {
     nTile.material = material;
 
     // Position
-    nTile.position = new Vector3(0, 5, 0);
+    nTile.position = new Vector3(0, 20, 0);
 
     // Scale
     const scale = 0.5;
@@ -144,52 +144,62 @@ export class MahjongScene {
     return material;
   }
 
+  private spawnTile(tileCode?: number) {
+    if (this._scene && this.tilePrefab) {
+      if (!tileCode) {
+        // take random value from keys of "tiles"
+        const keys = Object.keys(tiles);
+        tileCode = Number(keys[(keys.length * Math.random()) << 0]);
+
+        // Compute new tile ID from number of existing tiles
+        const tileId = this._scene.meshes
+          .filter((m) => m.name.startsWith("tile"))
+          .length.toString();
+
+        // Get amount of tiles
+        const tileCount = this._scene.meshes.filter((m) =>
+          m.name.startsWith("tile")
+        ).length;
+
+        // Clone and position tile next to a tile where there is space available
+        const tile = this.tilePrefab.clone(`tile-${tileId}`);
+        const randomness = Math.random() * 2;
+        tile.position = tile.position.add(Vector3.Up().scale(5 * tileCount));
+        tile.position = tile.position.add(Vector3.Left().scale(randomness));
+
+        // Texture decal
+        const decalMaterial = new StandardMaterial("decalMat", this._scene);
+        const tileName = tiles[tileCode];
+        decalMaterial.diffuseTexture = new Texture(
+          `./tiles/textures/${tileName}.png`,
+          this._scene
+        );
+        decalMaterial.diffuseTexture.hasAlpha = true;
+        const goldColor = new Color3(0.9, 0.8, 0.1);
+        decalMaterial.specularColor = goldColor;
+        decalMaterial.backFaceCulling = true;
+
+        const scale = 0.8;
+        const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
+          position: tile.absolutePosition,
+          normal: Vector3.Up(),
+          size: new Vector3(8 * scale, 10 * scale, 10 * scale),
+          angle: Math.PI / 2,
+          localMode: true,
+          cullBackFaces: true,
+        });
+        decal.material = decalMaterial.clone(`decal-${tileId}-material`);
+        decal.material.zOffset = -0.2;
+
+        tile.setEnabled(true);
+        this.shadowGenerator?.addShadowCaster(tile);
+      }
+    }
+  }
+
   addTile(sceneDirectorCommand?: SceneDirectorCommand) {
     if (this._scene && this.tilePrefab) {
-      // Compute new tile ID from number of existing tiles
-      const tileId = this._scene.meshes
-        .filter((m) => m.name.startsWith("tile"))
-        .length.toString();
-
-      // Get amount of tiles
-      const tileCount = this._scene.meshes.filter((m) =>
-        m.name.startsWith("tile")
-      ).length;
-
-      // Clone and position tile next to a tile where there is space available
-      const tile = this.tilePrefab.clone(`tile-${tileId}`);
-      tile.position = tile.position.add(Vector3.Right().scale(10 * tileCount));
-
-      // Texture decal
-      const decalMaterial = new StandardMaterial("decalMat", this._scene);
-      let tileCode = 31;
-      if (sceneDirectorCommand?.payload) {
-        tileCode = sceneDirectorCommand.payload;
-      }
-      const tileName = tiles[tileCode];
-      decalMaterial.diffuseTexture = new Texture(
-        `./tiles/textures/${tileName}.png`,
-        this._scene
-      );
-      decalMaterial.diffuseTexture.hasAlpha = true;
-      const goldColor = new Color3(0.9, 0.8, 0.1);
-      decalMaterial.specularColor = goldColor;
-      decalMaterial.backFaceCulling = true;
-
-      const scale = 0.8;
-      const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
-        position: tile.absolutePosition,
-        normal: Vector3.Up(),
-        size: new Vector3(8 * scale, 10 * scale, 10 * scale),
-        angle: Math.PI / 2,
-        localMode: true,
-        cullBackFaces: true,
-      });
-      decal.material = decalMaterial.clone(`decal-${tileId}-material`);
-      decal.material.zOffset = -0.2;
-
-      tile.setEnabled(true);
-      this.shadowGenerator?.addShadowCaster(tile);
+      this.spawnTile(sceneDirectorCommand?.payload);
 
       if (sceneDirectorCommand) {
         this.commandFinished(sceneDirectorCommand);
@@ -239,8 +249,13 @@ export class MahjongScene {
       camera.alpha += 0.001;
     });
 
-    // Spawn a first tile
-    this.addTile();
+    // // Spawn a first tile
+    // this.addTile();
+
+    // Spawn tile for each value in "tiles"
+    Object.keys(tiles).forEach((key) => {
+      this.spawnTile(Number(key));
+    });
 
     engine.runRenderLoop(() => {
       scene.render();

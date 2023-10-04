@@ -1,6 +1,6 @@
 <template>
   <div style="width: 100%; height: 40px">
-    <input type="text" v-model="name" />
+    <input type="text" v-model="tile" />
     <button @click="addTile">Add tile</button>
   </div>
   <BabylonJsScene :scene="mahjongScene" />
@@ -17,10 +17,10 @@ const bus = BusFactory.getBus();
 const mahjongScene = new MahjongScene(bus);
 
 const sceneDirector = new MahjongSceneDirector();
-const name = ref("");
+const tile = ref(0);
 
 const addTile = async () => {
-  void sceneDirector.addTile();
+  void sceneDirector.addTile(tile.value);
 };
 </script>
 
