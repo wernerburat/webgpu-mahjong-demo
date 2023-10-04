@@ -153,37 +153,34 @@ export class MahjongScene {
       const tileCount = this._scene.meshes.filter((m) =>
         m.name.startsWith("tile")
       ).length;
+
       // Clone and position tile next to a tile where there is space available
-      const tile = this.tilePrefab.clone(`tile-${tileId}`, null, true);
+      const tile = this.tilePrefab.clone(`tile-${tileId}`);
 
-      const position = this.tilePrefab.position.add(
-        Vector3.Right().scale(10 * tileCount)
-      );
-      tile.position = position;
-
-      tile.setEnabled(true);
-      this.shadowGenerator?.addShadowCaster(tile);
+      tile.position = tile.position.add(Vector3.Right().scale(10 * tileCount));
+      console.log(tile.position);
 
       // Texture decal
-      const decalMaterial = new StandardMaterial(
-        `decal-${tileId}`,
-        this._scene
-      );
-
+      const decalMaterial = new StandardMaterial("decalMat", this._scene);
       decalMaterial.diffuseTexture = new Texture(
         "./tiles/textures/Man1.png",
         this._scene
       );
       decalMaterial.diffuseTexture.hasAlpha = true;
+
       const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
-        position: tile.position.add(new Vector3(0, 0.1, 0)),
-        normal: new Vector3(0, 1, 0),
+        position: tile.absolutePosition,
+        normal: Vector3.Up(),
         size: new Vector3(8, 10, 10),
         angle: Math.PI / 2,
+        localMode: true,
+        cullBackFaces: true,
       });
-      decal.material = decalMaterial;
+      decal.material = decalMaterial.clone(`decal-${tileId}-material`);
+      decal.material.zOffset = 0.1;
 
-      console.log(decal.position);
+      tile.setEnabled(true);
+      this.shadowGenerator?.addShadowCaster(tile);
 
       if (sceneDirectorCommand) {
         this.commandFinished(sceneDirectorCommand);
