@@ -1,5 +1,5 @@
 <template>
-  <canvas ref="bjsCanvasRef" width="500" height="500" />
+  <canvas ref="bjsCanvasRef" />
 </template>
 
 <script lang="ts" setup>
@@ -37,3 +37,13 @@ onUnmounted(() => {
   props.scene.unregisterBusEvents();
 });
 </script>
+
+<style scoped>
+canvas {
+  width: 90%;
+  height: 90%;
+  overflow: hidden;
+
+  /*center the canvas*/
+}
+</style>

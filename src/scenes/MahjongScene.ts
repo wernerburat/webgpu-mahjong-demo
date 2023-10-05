@@ -17,6 +17,7 @@ import {
   HavokPlugin,
   PhysicsShapeType,
   PhysicsAggregate,
+  CubeTexture,
 } from "@babylonjs/core";
 
 import { GLTFFileLoader } from "@babylonjs/loaders";
@@ -71,11 +72,15 @@ export class MahjongScene {
   getMessagesToActionsMapping() {
     const messagesToActions = new Map<string, (payload: any) => void>();
     messagesToActions.set(SceneDirectorEventBusMessages.AddTile, this.addTile);
+    messagesToActions.set(
+      SceneDirectorEventBusMessages.SpawnAllTiles,
+      this.spawnAllTiles
+    );
 
     return messagesToActions;
   }
 
-  async newTilePrefab() {
+  async createTilePrefab() {
     new GLTFFileLoader();
     let tile = await Promise.resolve(
       SceneLoader.ImportMeshAsync(
@@ -90,24 +95,15 @@ export class MahjongScene {
     let nTile = tileParent.getChildMeshes()[0] as Mesh;
     nTile.name = "prefab-tile";
 
-    // Standard Material
-    // const newMaterial = new StandardMaterial("newMaterial", this._scene);
-    // newMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5);
-    // newMaterial.specularColor = new Color3(0.9, 1, 0.9);
-    // newMaterial.emissiveColor = new Color3(0.6, 0.6, 0.6);
-    // newMaterial.alpha = 1;
-    // newMaterial.backFaceCulling = true;
-    // nTile.material = newMaterial;
-
     // Material
     const material = this.createMarbleMaterial();
     nTile.material = material;
 
     // Position
-    nTile.position = new Vector3(0, 20, 0);
+    nTile.position = new Vector3(0, 150, 0);
 
     // Scale
-    const scale = 0.5;
+    const scale = 0.4;
     nTile.scaling = new Vector3(scale, scale, scale);
 
     // Shadows
@@ -117,6 +113,27 @@ export class MahjongScene {
     nTile.setEnabled(false);
 
     return nTile;
+  }
+
+  private createTableFabricMaterial() {
+    // Green pool / casino table fabric
+    const material = new PBRMaterial("tableMaterial", this._scene);
+    material.albedoTexture = new Texture(
+      "./materials/table/fabrics_0075_color_4k.jpg",
+      this._scene
+    );
+    material.bumpTexture = new Texture(
+      "./materials/table/fabrics_0075_normal_directx_4k.png",
+      this._scene
+    );
+    material.ambientTexture = new Texture(
+      "./materials/table/fabrics_0075_ao_4k.jpg",
+      this._scene
+    );
+    material.metallic = 0;
+    material.roughness = 1;
+
+    return material;
   }
 
   private createMarbleMaterial() {
@@ -135,75 +152,100 @@ export class MahjongScene {
       this._scene
     );
     material.metallic = 0;
-    material.roughness = 0.1;
+    material.roughness = 0;
     material.albedoColor = new Color3(1, 1, 1);
-    material.reflectivityColor = new Color3(0.5, 0.5, 0.5);
-    material.microSurface = 1;
-    material.reflectionColor = new Color3(0.5, 0.5, 0.5);
+    material.reflectivityColor = new Color3(1, 1, 1);
+    material.reflectionColor = new Color3(1, 1, 1);
     material.metallicReflectanceColor = new Color3(0.5, 0.5, 0.5);
     return material;
   }
 
-  private spawnTile(tileCode?: number) {
+  private spawnTile(tileCode: number, position?: Vector3) {
     if (this._scene && this.tilePrefab) {
-      if (!tileCode) {
-        // take random value from keys of "tiles"
-        const keys = Object.keys(tiles);
-        tileCode = Number(keys[(keys.length * Math.random()) << 0]);
+      // Compute new tile ID from number of existing tiles
+      const tileId = this._scene.meshes.filter((m) =>
+        m.name.startsWith("tile")
+      ).length;
 
-        // Compute new tile ID from number of existing tiles
-        const tileId = this._scene.meshes
-          .filter((m) => m.name.startsWith("tile"))
-          .length.toString();
+      // Clone and position tile next to a tile where there is space available
+      const tile = this.tilePrefab.clone(`tile-${tileId}`);
+      // Texture decal
+      this.createTileDecal(tileCode, tileId.toString(), tile);
 
-        // Get amount of tiles
-        const tileCount = this._scene.meshes.filter((m) =>
-          m.name.startsWith("tile")
-        ).length;
-
-        // Clone and position tile next to a tile where there is space available
-        const tile = this.tilePrefab.clone(`tile-${tileId}`);
-        const randomness = Math.random() * 2;
-        tile.position = tile.position.add(Vector3.Up().scale(5 * tileCount));
-        tile.position = tile.position.add(Vector3.Left().scale(randomness));
-
-        // Texture decal
-        const decalMaterial = new StandardMaterial("decalMat", this._scene);
-        const tileName = tiles[tileCode];
-        decalMaterial.diffuseTexture = new Texture(
-          `./tiles/textures/${tileName}.png`,
-          this._scene
+      if (!position) {
+        const randomness = Math.random() * 10;
+        const newHeightFactor = Math.random() * 20 * tile.scaling.y;
+        tile.position = tile.position.add(
+          Vector3.Up().scale(5 * tileId + newHeightFactor)
         );
-        decalMaterial.diffuseTexture.hasAlpha = true;
-        const goldColor = new Color3(0.9, 0.8, 0.1);
-        decalMaterial.specularColor = goldColor;
-        decalMaterial.backFaceCulling = true;
-
-        const scale = 0.8;
-        const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
-          position: tile.absolutePosition,
-          normal: Vector3.Up(),
-          size: new Vector3(8 * scale, 10 * scale, 10 * scale),
-          angle: Math.PI / 2,
-          localMode: true,
-          cullBackFaces: true,
-        });
-        decal.material = decalMaterial.clone(`decal-${tileId}-material`);
-        decal.material.zOffset = -0.2;
-
-        tile.setEnabled(true);
-        this.shadowGenerator?.addShadowCaster(tile);
+        tile.position = tile.position.add(Vector3.Left().scale(randomness));
+      } else {
+        tile.position = position;
       }
+
+      if (!position) {
+        // Rotate randomly to make it look more natural
+        const factor = 1;
+        tile.rotation = new Vector3(
+          Math.random() * factor,
+          Math.random() * factor,
+          Math.random() * factor
+        );
+      }
+
+      tile.setEnabled(true);
+      this.shadowGenerator?.addShadowCaster(tile);
+      new PhysicsAggregate(tile, PhysicsShapeType.BOX, {
+        mass: 100,
+        restitution: 1,
+      });
     }
   }
 
-  addTile(sceneDirectorCommand?: SceneDirectorCommand) {
-    if (this._scene && this.tilePrefab) {
-      this.spawnTile(sceneDirectorCommand?.payload);
+  private createTileDecal(tileCode: number, tileId: string, tile: Mesh) {
+    // Get the "tileCode" from the payload or generate a random one
+    if (!tileCode) {
+      // take random value from keys of "tiles"
+      const keys = Object.keys(tiles);
+      tileCode = Number(keys[(keys.length * Math.random()) << 0]);
+    }
+    const decalMaterial = new StandardMaterial("decalMat", this._scene);
 
-      if (sceneDirectorCommand) {
-        this.commandFinished(sceneDirectorCommand);
-      }
+    const tileName = tiles[tileCode];
+    decalMaterial.diffuseTexture = new Texture(
+      `./tiles/textures/${tileName}.png`,
+      this._scene
+    );
+    decalMaterial.diffuseTexture.hasAlpha = true;
+    const goldColor = new Color3(0.9, 0.8, 0.1);
+    decalMaterial.specularColor = goldColor;
+    decalMaterial.backFaceCulling = true;
+
+    console.log(tile.scaling);
+    const scale = 2;
+    const newSize = new Vector3(
+      tile.scaling.x * 6 * scale,
+      tile.scaling.y * 8 * scale,
+      tile.scaling.z * 8 * scale
+    );
+    const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
+      position: tile.absolutePosition,
+      normal: Vector3.Up(),
+      size: newSize,
+      angle: Math.PI / 2,
+      localMode: true,
+      cullBackFaces: true,
+    });
+    decal.material = decalMaterial.clone(`decal-${tileId}-material`);
+    decal.material.zOffset = -0.3;
+  }
+
+  addTile(sceneDirectorCommand: SceneDirectorCommand) {
+    if (this._scene && this.tilePrefab) {
+      console.log("aaaaaaaa", sceneDirectorCommand.payload);
+      this.spawnTile(sceneDirectorCommand.payload);
+
+      this.commandFinished(sceneDirectorCommand);
     }
   }
 
@@ -223,22 +265,36 @@ export class MahjongScene {
     this._scene = scene;
     // Lights
     const light = this.createLight(scene);
+    // const light2 = new DirectionalLight("dir02", new Vector3(1, -1, -1), scene);
+    // light2.position = new Vector3(50, 20, 50);
+    //light2.intensity = 0.7;
+
+    // Env
+    const envTex = CubeTexture.CreateFromPrefilteredData(
+      "./env/fireplace.env",
+      scene
+    );
+    scene.environmentTexture = envTex;
+    scene.createDefaultSkybox(envTex, true, 1000, 0.2);
 
     // Shadows
     this.shadowGenerator = new ShadowGenerator(1024, light);
     this.shadowGenerator.usePoissonSampling = true;
 
     // Tile prefab (after shadows to avoid no shadow caster)
-    this.tilePrefab = await this.newTilePrefab();
+    this.tilePrefab = await this.createTilePrefab();
 
-    // Ground
-    this.createGround(scene);
+    // Table
+    await this.createTable(scene);
 
     // Camera
     const camera = this.createCamera(scene);
     camera.attachControl(canvas, true);
 
-    this._scene.onPointerDown = (evt: IPointerEvent, pickInfo: PickingInfo) => {
+    this._scene.onPointerDown = (
+      _evt: IPointerEvent,
+      pickInfo: PickingInfo
+    ) => {
       this.emitCommand(
         SceneEventBusMessages.TileSelected,
         pickInfo?.pickedMesh?.name
@@ -252,16 +308,21 @@ export class MahjongScene {
     // // Spawn a first tile
     // this.addTile();
 
-    // Spawn tile for each value in "tiles"
-    Object.keys(tiles).forEach((key) => {
-      this.spawnTile(Number(key));
-    });
+    //this.spawnAllTiles();
 
     engine.runRenderLoop(() => {
       scene.render();
     });
 
     return { engine, scene };
+  }
+
+  private spawnAllTiles() {
+    for (let i = 0; i < 4; i++) {
+      Object.keys(tiles).forEach((key) => {
+        this.spawnTile(Number(key));
+      });
+    }
   }
 
   private createLight(scene: Scene) {
@@ -275,8 +336,8 @@ export class MahjongScene {
     const camera = new ArcRotateCamera(
       "camera1",
       0.5,
-      0.8,
-      60,
+      0.6,
+      150,
       new Vector3(0, 0, 0),
       scene
     );
@@ -284,26 +345,31 @@ export class MahjongScene {
     return camera;
   }
 
-  private createGround(scene: Scene) {
+  private async createTable(scene: Scene) {
     // Mesh
-    const ground = MeshBuilder.CreateGround(
+    const table = MeshBuilder.CreateGround(
       "ground",
       { width: 100, height: 100 },
       scene
     );
 
     // Physics
-    new PhysicsAggregate(ground, PhysicsShapeType.BOX, {
+    new PhysicsAggregate(table, PhysicsShapeType.BOX, {
       mass: 0,
       restitution: 0.1,
     });
 
     // Material
-    const groundMat = new StandardMaterial("groundMat", scene);
-    groundMat.diffuseColor = new Color3(0.15, 0.4, 0.15);
-    groundMat.specularColor = new Color3(0, 0, 0);
-    ground.material = groundMat;
-    ground.receiveShadows = true;
+    // const groundMat = new StandardMaterial("groundMat", scene);
+    // groundMat.diffuseColor = new Color3(0.15, 0.4, 0.15);
+    // groundMat.specularColor = new Color3(0, 0, 0);
+    // table.material = groundMat;
+    // table.receiveShadows = true;
+
+    // PBR
+    const groundMat = this.createTableFabricMaterial();
+    table.material = groundMat;
+    table.receiveShadows = true;
   }
 
   // helper methods

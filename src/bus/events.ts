@@ -6,6 +6,7 @@ export enum SceneDirectorEventBusMessages {
   ShowInspector = "showInspector",
   ClearMarbles = "clearMarbles",
   AddTile = "addTile",
+  SpawnAllTiles = "spawnAllTiles",
   AddMarble = "addMarble",
   GetMeshNames = "getMeshNames",
 }

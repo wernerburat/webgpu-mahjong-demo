@@ -39,6 +39,10 @@ export class MahjongSceneDirector extends BaseSceneDirector {
     void this.asyncCommand(SceneDirectorEventBusMessages.AddTile, code);
   }
 
+  async spawnAllTiles() {
+    void this.asyncCommand(SceneDirectorEventBusMessages.SpawnAllTiles, {});
+  }
+
   // Vue reactive stuff
   useSelectedMarbleName() {
     return this._selectedMarbleName;
