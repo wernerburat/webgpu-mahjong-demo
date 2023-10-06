@@ -27,7 +27,6 @@ export class PostProcessingSetup {
 
   static setupDithering(camera: Camera, engine: WebGPUEngine) {
     const dithering = new DitheringPostProcess(camera, engine);
-    dithering.ditherScale = 150.0;
     return dithering;
   }
 
@@ -40,4 +39,6 @@ export class PostProcessingSetup {
     this.setupFXAA(camera);
     this.setupDithering(camera, engine);
   }
+
+  static applyDithering(camera: Camera, engine: WebGPUEngine) {}
 }

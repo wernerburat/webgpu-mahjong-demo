@@ -1,9 +1,10 @@
 <template>
-  <MahjongView></MahjongView>
+  <div id="app">
+    <MahjongView></MahjongView>
+  </div>
 </template>
 
 <script setup lang="ts">
-import MenuComponent from "./components/MenuComponent.vue";
 import MahjongView from "./views/MahjongView.vue";
 </script>
 

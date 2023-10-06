@@ -1,4 +1,5 @@
 <template>
+  <BabylonJsScene :scene="mahjongScene" />
   <div v-if="showMenu" class="mah-menu">
     <input type="text" v-model="tile" />
     <button @click="addTile">Add tile</button>
@@ -8,7 +9,6 @@
       <marquee>Spawn</marquee>
     </div>
   </div>
-  <BabylonJsScene :scene="mahjongScene" />
 </template>
 
 <script setup lang="ts">

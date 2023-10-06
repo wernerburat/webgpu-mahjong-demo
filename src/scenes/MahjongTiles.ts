@@ -37,7 +37,7 @@ export class MahjongTileManager {
       SceneLoader.ImportMeshAsync(
         "",
         "./tiles/models/",
-        "JogneTuil.gltf",
+        "JogneTri.glb",
         this._scene
       )
     );

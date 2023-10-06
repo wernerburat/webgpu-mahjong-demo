@@ -1,10 +1,14 @@
 <template>
   <canvas ref="bjsCanvasRef" />
+  <div class="shader-controls">
+    <ShaderControls />
+  </div>
 </template>
 
 <script lang="ts" setup>
 import { onMounted, onUnmounted, ref, defineProps } from "vue";
 import { BabylonManager } from "../manager/BabylonManager";
+import ShaderControls from "./ShaderControls.vue";
 
 const props = defineProps({
   scene: {
@@ -16,12 +20,17 @@ const props = defineProps({
 const bjsCanvasRef = ref(null);
 let babylonManager: BabylonManager;
 
-onMounted(() => {
-  babylonManager = new BabylonManager(bjsCanvasRef.value!);
-  babylonManager.initialize(props.scene);
+onMounted(async () => {
+  if (bjsCanvasRef.value) {
+    babylonManager = new BabylonManager(bjsCanvasRef.value);
+    await babylonManager.initialize(props.scene);
+    console.log("manager initialized");
+  }
 });
 
 onUnmounted(() => {
+  console.log("unmounteds");
+  babylonManager?.dispose();
   props.scene.unregisterBusEvents();
 });
 </script>
@@ -31,7 +40,5 @@ canvas {
   width: 90%;
   height: 90%;
   overflow: hidden;
-
-  /*center the canvas*/
 }
 </style>

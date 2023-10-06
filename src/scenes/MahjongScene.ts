@@ -42,6 +42,7 @@ export class MahjongScene {
     canvas: HTMLCanvasElement,
     hk: HavokPlugin
   ) {
+    console.log("Creating BabylonJS Scene");
     const scene = this.initializeScene(engine, hk);
     const light = this.setupLighting(scene);
     this.setupEnvironment(scene);
@@ -50,7 +51,6 @@ export class MahjongScene {
     await this.setupTable(scene);
     this.setupCamera(scene, canvas);
     this.setupEventHandlers(scene);
-    this.setupPostProcessing(scene, this._camera!, engine);
     this.startRenderLoop(engine, scene);
     return { engine, scene };
   }
@@ -112,9 +112,17 @@ export class MahjongScene {
   }
 
   private startRenderLoop(engine: WebGPUEngine, scene: Scene): void {
+    engine.beginFrame();
     engine.runRenderLoop(() => {
       scene.render();
     });
+    engine.endFrame();
+
+    window.addEventListener("resize", () => {
+      engine.resize();
+    });
+
+    this.setupPostProcessing(scene, this._camera!, engine);
   }
 
   private async createTable(scene: Scene) {
