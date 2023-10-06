@@ -19,7 +19,7 @@ import { MahjongScene } from "../scenes/MahjongScene";
 import { BusFactory } from "../bus/BusFactory";
 
 const showMenu = ref(false);
-const hi = ref(true);
+const hi = ref(false);
 
 const bus = BusFactory.getBus();
 const mahjongScene = new MahjongScene(bus);

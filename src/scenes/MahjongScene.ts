@@ -18,6 +18,12 @@ import {
   PhysicsShapeType,
   PhysicsAggregate,
   CubeTexture,
+  Nullable,
+  AbstractMesh,
+  PhysicsImpostor,
+  VolumetricLightScatteringPostProcess,
+  ArcRotateCameraKeyboardMoveInput,
+  Matrix,
 } from "@babylonjs/core";
 
 import { GLTFFileLoader } from "@babylonjs/loaders";
@@ -34,8 +40,13 @@ import { tiles } from "./tiles";
 
 export class MahjongScene {
   private _scene?: Scene;
+  private _camera?: ArcRotateCamera;
   private tilePrefab?: Mesh;
   private shadowGenerator?: ShadowGenerator;
+  private faceTextures? = new Map<number, Texture>();
+
+  private pickedTile: Nullable<AbstractMesh> = null;
+  private initialMousePos?: Vector3;
 
   constructor(private _eventBus: IMessageBus) {}
 
@@ -92,6 +103,7 @@ export class MahjongScene {
     );
 
     let tileParent = tile.meshes[0];
+
     let nTile = tileParent.getChildMeshes()[0] as Mesh;
     nTile.name = "prefab-tile";
 
@@ -100,7 +112,7 @@ export class MahjongScene {
     nTile.material = material;
 
     // Position
-    nTile.position = new Vector3(0, 150, 0);
+    nTile.position = new Vector3(0, 0, 0);
 
     // Scale
     const scale = 0.4;
@@ -110,8 +122,8 @@ export class MahjongScene {
     nTile.receiveShadows = true;
     this.shadowGenerator?.addShadowCaster(nTile);
 
+    // Disable by default
     nTile.setEnabled(false);
-
     return nTile;
   }
 
@@ -160,7 +172,7 @@ export class MahjongScene {
     return material;
   }
 
-  private spawnTile(tileCode: number, position?: Vector3) {
+  private spawnTilesDemo(tileCode: number, position?: Vector3) {
     if (this._scene && this.tilePrefab) {
       // Compute new tile ID from number of existing tiles
       const tileId = this._scene.meshes.filter((m) =>
@@ -170,7 +182,7 @@ export class MahjongScene {
       // Clone and position tile next to a tile where there is space available
       const tile = this.tilePrefab.clone(`tile-${tileId}`);
       // Texture decal
-      this.createTileDecal(tileCode, tileId.toString(), tile);
+      this.assignTileDecal(tileCode, tileId.toString(), tile);
 
       if (!position) {
         const randomness = Math.random() * 10;
@@ -196,32 +208,26 @@ export class MahjongScene {
       tile.setEnabled(true);
       this.shadowGenerator?.addShadowCaster(tile);
       new PhysicsAggregate(tile, PhysicsShapeType.BOX, {
-        mass: 100,
-        restitution: 1,
+        mass: 5,
+        restitution: 0.1,
       });
     }
   }
 
-  private createTileDecal(tileCode: number, tileId: string, tile: Mesh) {
-    // Get the "tileCode" from the payload or generate a random one
-    if (!tileCode) {
-      // take random value from keys of "tiles"
-      const keys = Object.keys(tiles);
-      tileCode = Number(keys[(keys.length * Math.random()) << 0]);
-    }
+  private assignTileDecal(tileCode: number, tileId: string, tile: Mesh) {
     const decalMaterial = new StandardMaterial("decalMat", this._scene);
 
-    const tileName = tiles[tileCode];
-    decalMaterial.diffuseTexture = new Texture(
-      `./tiles/textures/${tileName}.png`,
-      this._scene
-    );
+    const texture = this.faceTextures!.get(tileCode);
+    if (!texture) {
+      console.error("Texture not found for tile code", tileCode);
+      return;
+    }
+    decalMaterial.diffuseTexture = texture;
     decalMaterial.diffuseTexture.hasAlpha = true;
     const goldColor = new Color3(0.9, 0.8, 0.1);
     decalMaterial.specularColor = goldColor;
     decalMaterial.backFaceCulling = true;
 
-    console.log(tile.scaling);
     const scale = 2;
     const newSize = new Vector3(
       tile.scaling.x * 6 * scale,
@@ -237,13 +243,14 @@ export class MahjongScene {
       cullBackFaces: true,
     });
     decal.material = decalMaterial.clone(`decal-${tileId}-material`);
-    decal.material.zOffset = -0.3;
+    decal.material.zOffset = -1;
+    decal.isPickable = false;
   }
 
   addTile(sceneDirectorCommand: SceneDirectorCommand) {
     if (this._scene && this.tilePrefab) {
       console.log("aaaaaaaa", sceneDirectorCommand.payload);
-      this.spawnTile(sceneDirectorCommand.payload);
+      this.spawnTilesDemo(sceneDirectorCommand.payload);
 
       this.commandFinished(sceneDirectorCommand);
     }
@@ -284,31 +291,26 @@ export class MahjongScene {
     // Tile prefab (after shadows to avoid no shadow caster)
     this.tilePrefab = await this.createTilePrefab();
 
+    // Prepare textures
+    this.faceTextures = this.createAllTextures();
+
     // Table
-    await this.createTable(scene);
+    const table = await this.createTable(scene);
 
     // Camera
-    const camera = this.createCamera(scene);
-    camera.attachControl(canvas, true);
+    this._camera = this.createCamera(scene, canvas);
 
-    this._scene.onPointerDown = (
-      _evt: IPointerEvent,
-      pickInfo: PickingInfo
-    ) => {
-      this.emitCommand(
-        SceneEventBusMessages.TileSelected,
-        pickInfo?.pickedMesh?.name
-      );
-    };
+    //godRays.mesh.position = lightMesh.position;
+    //godRays.density = 0.5;
 
-    this._scene.onBeforeRenderObservable.add(() => {
-      camera.alpha += 0.001;
-    });
+    // Spawn tiles!
+    this.createAllTilesOnTable();
 
-    // // Spawn a first tile
-    // this.addTile();
-
-    //this.spawnAllTiles();
+    // Add physics to tiles
+    this.createTilesPhysics();
+    // Click handlers
+    this.setupClickHandler();
+    this.setupDragHandlers();
 
     engine.runRenderLoop(() => {
       scene.render();
@@ -317,12 +319,186 @@ export class MahjongScene {
     return { engine, scene };
   }
 
+  private enableGodRaysOnObject(mesh: Mesh) {
+    const godRays = new VolumetricLightScatteringPostProcess(
+      "godrays",
+      1.0,
+      this._camera!,
+      mesh,
+      100,
+      Texture.BILINEAR_SAMPLINGMODE,
+      this._scene!.getEngine(),
+      false
+    );
+    // Customize the density of the rays
+    godRays.density = 0.5;
+
+    // Customize the decay of the rays
+    godRays.decay = 0.97;
+
+    // Animate
+    this._scene!.onBeforeRenderObservable.add(() => {
+      godRays.weight = Math.sin(this._scene!.getEngine().getDeltaTime() / 1000);
+    });
+
+    // Customize the exposure of the rays
+    godRays.exposure = 0.6;
+  }
+
+  private setupClickHandler() {
+    if (this._scene) {
+      this._scene.onPointerDown = (
+        _evt: IPointerEvent,
+        pickInfo: PickingInfo
+      ) => {
+        if (pickInfo.pickedMesh) {
+          this.enableGodRaysOnObject(pickInfo.pickedMesh as Mesh);
+          if (pickInfo.pickedMesh.name.startsWith("tile")) {
+            // Enable god rays on the clicked tile
+            this.pickedTile = pickInfo.pickedMesh;
+          }
+          this.initialMousePos = pickInfo.ray!.origin;
+        }
+        this.emitCommand(
+          SceneEventBusMessages.TileSelected,
+          pickInfo?.pickedMesh?.name
+        );
+      };
+    }
+  }
+
+  private setupDragHandlers() {
+    this._scene!.onPointerMove = (
+      _evt: IPointerEvent,
+      pickInfo: PickingInfo
+    ) => {
+      if (this.pickedTile) {
+        this._camera?.detachControl();
+        // Calculate movement based on pickInfo.ray.origin
+        // and this.initialMousePos and move or apply force to tile
+        const dragVector = pickInfo.ray!.origin.subtract(this.initialMousePos!);
+        //this.pickedTile.position.addInPlace(dragVector.scale(1));
+        this.pickedTile.position.y = 1;
+        // test if the drag works on the tile:
+        this.pickedTile.physicsBody?.applyForce(
+          dragVector.scale(1),
+          Vector3.Zero()
+        );
+
+        this.initialMousePos = pickInfo.ray!.origin;
+      }
+    };
+    this._scene!.onPointerUp = (_evt: IPointerEvent) => {
+      this._camera?.attachControl(
+        this._scene!.getEngine().getRenderingCanvas()
+      );
+      if (this.pickedTile) {
+        // Calculate force based on how fast and where the mouse moved,
+        // then apply that force to this.pickedTile
+        this.pickedTile = null; // End the drag operation
+      }
+    };
+  }
+  private createTilesPhysics() {
+    const tiles = this.getAllTiles();
+    tiles?.forEach((tile) => {
+      new PhysicsAggregate(tile, PhysicsShapeType.BOX, {
+        mass: 5,
+        restitution: 0.1,
+      });
+    });
+  }
+
+  private getAllTiles() {
+    return this._scene?.meshes.filter((m) => m.name.startsWith("tile"));
+  }
+
   private spawnAllTiles() {
     for (let i = 0; i < 4; i++) {
       Object.keys(tiles).forEach((key) => {
-        this.spawnTile(Number(key));
+        this.spawnTilesDemo(Number(key));
       });
     }
+  }
+
+  private createTile(tileCode: number, spawn: boolean = true) {
+    if (this._scene && this.tilePrefab) {
+      // TILE NAME
+      const tileName = this.generateTileName(tileCode);
+
+      // CLONE PREFAB
+      const tile = this.tilePrefab.clone(tileName);
+
+      // ASSIGN DECAL (FACE TEXTURE)
+      this.assignTileDecal(tileCode, tileName, tile);
+
+      // SPAWN IT?
+      tile.setEnabled(spawn);
+
+      return tile;
+    }
+    return null;
+  }
+
+  private generateTileName(tileCode: number) {
+    let tileName = "";
+    if (this._scene) {
+      // TILE NAME: tile-<tileCode>-<tileId>
+
+      // Example: tileCode = 1
+      // Name will be: "tile-1-0"
+      // Second one will be: "tile-1-1", etc.
+      let tileId = 0;
+      tileName = `tile-${tileCode}-${tileId}`;
+      while (this._scene.getMeshByName(tileName)) {
+        tileId++;
+        tileName = `tile-${tileCode}-${tileId}`;
+      }
+    }
+    return tileName;
+  }
+
+  /*** Helper function to spawn all tiles on table. */
+  private createAllTilesOnTable() {
+    if (this._scene && this.tilePrefab) {
+      const tileBoundingInfo =
+        this.tilePrefab.getBoundingInfo().boundingBox.extendSize;
+      const tileWidth = tileBoundingInfo.x;
+      const tileDepth = tileBoundingInfo.z; // Use the depth
+      const tilesPerRow = 10; // Assuming 10 tiles per row
+
+      const position = this.getTableTopLeftPosition();
+
+      Object.keys(tiles).forEach((key, index) => {
+        const rowNumber = Math.floor(index / tilesPerRow);
+        const columnNumber = index % tilesPerRow;
+
+        const tile = this.createTile(Number(key), true);
+        tile!.position = position.add(
+          new Vector3(
+            tileWidth * columnNumber,
+            0,
+            tileDepth * rowNumber // Adjusting the Z-coordinate
+          )
+        );
+      });
+    }
+  }
+
+  private getTableTopLeftPosition() {
+    return new Vector3(-44, 3, -40);
+  }
+  private createAllTextures(): Map<number, Texture> {
+    const textures = new Map<number, Texture>();
+    Object.keys(tiles).forEach((key) => {
+      const tileName = tiles[Number(key)];
+      const texture = new Texture(
+        `./tiles/textures/${tileName}.png`,
+        this._scene
+      );
+      textures.set(Number(key), texture);
+    });
+    return textures;
   }
 
   private createLight(scene: Scene) {
@@ -332,16 +508,37 @@ export class MahjongScene {
     return light;
   }
 
-  private createCamera(scene: Scene) {
+  private createCamera(scene: Scene, canvas: HTMLCanvasElement) {
     const camera = new ArcRotateCamera(
       "camera1",
-      0.5,
-      0.6,
+      Math.PI / 2,
+      -Math.PI / 2,
       150,
       new Vector3(0, 0, 0),
       scene
     );
     camera.setTarget(Vector3.Zero());
+    camera.attachControl(canvas, true);
+    scene.onBeforeRenderObservable.add(() => {
+      // camera.alpha += 0.001;
+    });
+
+    camera.inputs.removeByType("ArcRotateCameraKeyboardMoveInput");
+    camera.inputs.add(new KeyboardPanningInput(new Matrix(), Vector3.Zero()));
+    //-
+
+    const w = 87;
+    const s = 83;
+    const d = 68;
+    const a = 65;
+
+    camera.keysUp.push(w);
+    camera.keysDown.push(s);
+    camera.keysRight.push(d);
+    camera.keysLeft.push(a);
+
+    camera.attachControl(canvas, true);
+
     return camera;
   }
 
@@ -359,17 +556,12 @@ export class MahjongScene {
       restitution: 0.1,
     });
 
-    // Material
-    // const groundMat = new StandardMaterial("groundMat", scene);
-    // groundMat.diffuseColor = new Color3(0.15, 0.4, 0.15);
-    // groundMat.specularColor = new Color3(0, 0, 0);
-    // table.material = groundMat;
-    // table.receiveShadows = true;
-
     // PBR
     const groundMat = this.createTableFabricMaterial();
     table.material = groundMat;
     table.receiveShadows = true;
+
+    return table;
   }
 
   // helper methods
@@ -385,5 +577,55 @@ export class MahjongScene {
       payload
     );
     AsyncBus.commandFinished(this._eventBus, sceneDirectorCommand, payload);
+  }
+}
+
+class KeyboardPanningInput extends ArcRotateCameraKeyboardMoveInput {
+  matrix: any;
+  displacement: any;
+  constructor(matrix: any, vector: any) {
+    super();
+
+    this.matrix = matrix;
+    this.displacement = vector;
+  }
+
+  checkInputs() {
+    // Ignore typescript error
+    // @ts-ignore
+    if (this._onKeyboardObserver) {
+      const camera = this.camera;
+      const m = this.matrix;
+
+      this.camera.absoluteRotation.toRotationMatrix(m);
+
+      // @ts-ignore
+      for (let index = 0; index < this._keys.length; index++) {
+        // @ts-ignore
+        const keyCode = this._keys[index];
+
+        if (this.keysReset.indexOf(keyCode) !== -1) {
+          if (camera.useInputToRestoreState) {
+            camera.restoreState();
+            continue;
+          }
+        }
+        //Matrix magic see https://www.3dgep.com/understanding-the-view-matrix/ and
+        //   https://forum.babylonjs.com/t/arc-rotate-camera-panning-on-button-click/15428/6
+        else if (this.keysLeft.indexOf(keyCode) !== -1) {
+          this.displacement.set(-m.m[0], -m.m[1], -m.m[2]);
+        } else if (this.keysUp.indexOf(keyCode) !== -1) {
+          this.displacement.set(m.m[8], 0, m.m[10]);
+        } else if (this.keysRight.indexOf(keyCode) !== -1) {
+          this.displacement.set(m.m[0], m.m[1], m.m[2]);
+        } else if (this.keysDown.indexOf(keyCode) !== -1) {
+          this.displacement.set(-m.m[8], 0, -m.m[10]);
+        }
+
+        this.camera.target.addInPlace(this.displacement);
+        this.camera.position.addInPlace(this.displacement);
+        this.displacement.setAll(0);
+      }
+    }
   }
 }
