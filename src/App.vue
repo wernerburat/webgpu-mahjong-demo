@@ -1,5 +1,5 @@
 <template>
-  
+  <MahjongView></MahjongView>
 </template>
 
 <script setup lang="ts">
