@@ -3,34 +3,22 @@
 </template>
 
 <script lang="ts" setup>
-import HavokPhysics from "@babylonjs/havok";
-
-import { MarbleScene } from "../scenes/MarbleScene";
-import { MahjongScene } from "../scenes/MahjongScene";
-import { SecretScene } from "../scenes/SecretScene";
 import { onMounted, onUnmounted, ref, defineProps } from "vue";
-import { WebGPUEngine, HavokPlugin } from "@babylonjs/core";
+import { BabylonManager } from "../manager/BabylonManager";
 
 const props = defineProps({
   scene: {
-    type: MahjongScene || MarbleScene || SecretScene,
+    type: Object,
     required: true,
   },
 });
 
 const bjsCanvasRef = ref(null);
+let babylonManager: BabylonManager;
 
 onMounted(() => {
-  props.scene.registerBusEvents();
-  const engine = new WebGPUEngine(bjsCanvasRef.value!);
-  const bjsCanvas = bjsCanvasRef.value;
-  if (bjsCanvas) {
-    engine.initAsync().then(async () => {
-      const havokInstance = await HavokPhysics();
-      const hk = new HavokPlugin(true, havokInstance);
-      props.scene.createScene(engine, bjsCanvas, hk);
-    });
-  }
+  babylonManager = new BabylonManager(bjsCanvasRef.value!);
+  babylonManager.initialize(props.scene);
 });
 
 onUnmounted(() => {

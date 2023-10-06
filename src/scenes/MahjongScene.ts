@@ -1,32 +1,25 @@
 import {
   Scene,
   Vector3,
-  Color3,
   Mesh,
   IPointerEvent,
   PickingInfo,
   ArcRotateCamera,
-  SceneLoader,
-  PBRMaterial,
   Texture,
   WebGPUEngine,
   MeshBuilder,
   ShadowGenerator,
   DirectionalLight,
-  StandardMaterial,
   HavokPlugin,
   PhysicsShapeType,
   PhysicsAggregate,
   CubeTexture,
   Nullable,
   AbstractMesh,
-  PhysicsImpostor,
   VolumetricLightScatteringPostProcess,
   ArcRotateCameraKeyboardMoveInput,
   Matrix,
 } from "@babylonjs/core";
-
-import { GLTFFileLoader } from "@babylonjs/loaders";
 
 import { AsyncBus } from "../bus/AsyncBus";
 import { IMessageBus } from "../bus/BusFactory";
@@ -36,14 +29,15 @@ import {
 } from "../bus/events";
 import { SceneDirectorCommand } from "../director/BaseSceneDirector";
 import { reviver } from "../utils/json";
-import { tiles } from "./tiles";
+import { MahjongTileManager } from "./MahjongTiles";
+import { createTableFabricMaterial } from "./MahjongMaterials";
 
 export class MahjongScene {
   private _scene?: Scene;
   private _camera?: ArcRotateCamera;
   private tilePrefab?: Mesh;
   private shadowGenerator?: ShadowGenerator;
-  private faceTextures? = new Map<number, Texture>();
+  private tileManager?: MahjongTileManager;
 
   private pickedTile: Nullable<AbstractMesh> = null;
   private initialMousePos?: Vector3;
@@ -75,183 +69,16 @@ export class MahjongScene {
     this._eventBus.$off(SceneDirectorEventBusMessages.SceneDirectorCommand);
   }
 
-  //
-  // Your code starts here
-  //
-
   // which messages you want to react to
   getMessagesToActionsMapping() {
     const messagesToActions = new Map<string, (payload: any) => void>();
     messagesToActions.set(SceneDirectorEventBusMessages.AddTile, this.addTile);
-    messagesToActions.set(
-      SceneDirectorEventBusMessages.SpawnAllTiles,
-      this.spawnAllTiles
-    );
 
     return messagesToActions;
   }
 
-  async createTilePrefab() {
-    new GLTFFileLoader();
-    let tile = await Promise.resolve(
-      SceneLoader.ImportMeshAsync(
-        "",
-        "./tiles/models/",
-        "JogneTuil.gltf",
-        this._scene
-      )
-    );
-
-    let tileParent = tile.meshes[0];
-
-    let nTile = tileParent.getChildMeshes()[0] as Mesh;
-    nTile.name = "prefab-tile";
-
-    // Material
-    const material = this.createMarbleMaterial();
-    nTile.material = material;
-
-    // Position
-    nTile.position = new Vector3(0, 0, 0);
-
-    // Scale
-    const scale = 0.4;
-    nTile.scaling = new Vector3(scale, scale, scale);
-
-    // Shadows
-    nTile.receiveShadows = true;
-    this.shadowGenerator?.addShadowCaster(nTile);
-
-    // Disable by default
-    nTile.setEnabled(false);
-    return nTile;
-  }
-
-  private createTableFabricMaterial() {
-    // Green pool / casino table fabric
-    const material = new PBRMaterial("tableMaterial", this._scene);
-    material.albedoTexture = new Texture(
-      "./materials/table/fabrics_0075_color_4k.jpg",
-      this._scene
-    );
-    material.bumpTexture = new Texture(
-      "./materials/table/fabrics_0075_normal_directx_4k.png",
-      this._scene
-    );
-    material.ambientTexture = new Texture(
-      "./materials/table/fabrics_0075_ao_4k.jpg",
-      this._scene
-    );
-    material.metallic = 0;
-    material.roughness = 1;
-
-    return material;
-  }
-
-  private createMarbleMaterial() {
-    const material = new PBRMaterial("tileMaterial", this._scene);
-    material.albedoTexture = new Texture(
-      "./tiles/materials/marble/color_map.jpg",
-      this._scene
-    );
-    material.bumpTexture = new Texture(
-      "./tiles/materials/marble/normal_map_opengl.jpg",
-      this._scene
-    );
-
-    material.ambientTexture = new Texture(
-      "./tiles/materials/marble/ao_map.jpg",
-      this._scene
-    );
-    material.metallic = 0;
-    material.roughness = 0;
-    material.albedoColor = new Color3(1, 1, 1);
-    material.reflectivityColor = new Color3(1, 1, 1);
-    material.reflectionColor = new Color3(1, 1, 1);
-    material.metallicReflectanceColor = new Color3(0.5, 0.5, 0.5);
-    return material;
-  }
-
-  private spawnTilesDemo(tileCode: number, position?: Vector3) {
-    if (this._scene && this.tilePrefab) {
-      // Compute new tile ID from number of existing tiles
-      const tileId = this._scene.meshes.filter((m) =>
-        m.name.startsWith("tile")
-      ).length;
-
-      // Clone and position tile next to a tile where there is space available
-      const tile = this.tilePrefab.clone(`tile-${tileId}`);
-      // Texture decal
-      this.assignTileDecal(tileCode, tileId.toString(), tile);
-
-      if (!position) {
-        const randomness = Math.random() * 10;
-        const newHeightFactor = Math.random() * 20 * tile.scaling.y;
-        tile.position = tile.position.add(
-          Vector3.Up().scale(5 * tileId + newHeightFactor)
-        );
-        tile.position = tile.position.add(Vector3.Left().scale(randomness));
-      } else {
-        tile.position = position;
-      }
-
-      if (!position) {
-        // Rotate randomly to make it look more natural
-        const factor = 1;
-        tile.rotation = new Vector3(
-          Math.random() * factor,
-          Math.random() * factor,
-          Math.random() * factor
-        );
-      }
-
-      tile.setEnabled(true);
-      this.shadowGenerator?.addShadowCaster(tile);
-      new PhysicsAggregate(tile, PhysicsShapeType.BOX, {
-        mass: 5,
-        restitution: 0.1,
-      });
-    }
-  }
-
-  private assignTileDecal(tileCode: number, tileId: string, tile: Mesh) {
-    const decalMaterial = new StandardMaterial("decalMat", this._scene);
-
-    const texture = this.faceTextures!.get(tileCode);
-    if (!texture) {
-      console.error("Texture not found for tile code", tileCode);
-      return;
-    }
-    decalMaterial.diffuseTexture = texture;
-    decalMaterial.diffuseTexture.hasAlpha = true;
-    const goldColor = new Color3(0.9, 0.8, 0.1);
-    decalMaterial.specularColor = goldColor;
-    decalMaterial.backFaceCulling = true;
-
-    const scale = 2;
-    const newSize = new Vector3(
-      tile.scaling.x * 6 * scale,
-      tile.scaling.y * 8 * scale,
-      tile.scaling.z * 8 * scale
-    );
-    const decal = MeshBuilder.CreateDecal(`decal-${tileId}`, tile, {
-      position: tile.absolutePosition,
-      normal: Vector3.Up(),
-      size: newSize,
-      angle: Math.PI / 2,
-      localMode: true,
-      cullBackFaces: true,
-    });
-    decal.material = decalMaterial.clone(`decal-${tileId}-material`);
-    decal.material.zOffset = -1;
-    decal.isPickable = false;
-  }
-
   addTile(sceneDirectorCommand: SceneDirectorCommand) {
     if (this._scene && this.tilePrefab) {
-      console.log("aaaaaaaa", sceneDirectorCommand.payload);
-      this.spawnTilesDemo(sceneDirectorCommand.payload);
-
       this.commandFinished(sceneDirectorCommand);
     }
   }
@@ -288,14 +115,15 @@ export class MahjongScene {
     this.shadowGenerator = new ShadowGenerator(1024, light);
     this.shadowGenerator.usePoissonSampling = true;
 
-    // Tile prefab (after shadows to avoid no shadow caster)
-    this.tilePrefab = await this.createTilePrefab();
-
-    // Prepare textures
-    this.faceTextures = this.createAllTextures();
+    // Tile manager, now that scene and shadows are created
+    this.tileManager = new MahjongTileManager(
+      this._scene!,
+      this.shadowGenerator!
+    );
+    await this.tileManager.initializeManager();
 
     // Table
-    const table = await this.createTable(scene);
+    await this.createTable(scene);
 
     // Camera
     this._camera = this.createCamera(scene, canvas);
@@ -304,10 +132,11 @@ export class MahjongScene {
     //godRays.density = 0.5;
 
     // Spawn tiles!
-    this.createAllTilesOnTable();
+    this.tileManager.createAllTilesOnTable();
 
     // Add physics to tiles
-    this.createTilesPhysics();
+    this.tileManager.createTilesPhysics();
+
     // Click handlers
     this.setupClickHandler();
     this.setupDragHandlers();
@@ -352,7 +181,7 @@ export class MahjongScene {
         pickInfo: PickingInfo
       ) => {
         if (pickInfo.pickedMesh) {
-          this.enableGodRaysOnObject(pickInfo.pickedMesh as Mesh);
+          // this.enableGodRaysOnObject(pickInfo.pickedMesh as Mesh);
           if (pickInfo.pickedMesh.name.startsWith("tile")) {
             // Enable god rays on the clicked tile
             this.pickedTile = pickInfo.pickedMesh;
@@ -398,107 +227,6 @@ export class MahjongScene {
         this.pickedTile = null; // End the drag operation
       }
     };
-  }
-  private createTilesPhysics() {
-    const tiles = this.getAllTiles();
-    tiles?.forEach((tile) => {
-      new PhysicsAggregate(tile, PhysicsShapeType.BOX, {
-        mass: 5,
-        restitution: 0.1,
-      });
-    });
-  }
-
-  private getAllTiles() {
-    return this._scene?.meshes.filter((m) => m.name.startsWith("tile"));
-  }
-
-  private spawnAllTiles() {
-    for (let i = 0; i < 4; i++) {
-      Object.keys(tiles).forEach((key) => {
-        this.spawnTilesDemo(Number(key));
-      });
-    }
-  }
-
-  private createTile(tileCode: number, spawn: boolean = true) {
-    if (this._scene && this.tilePrefab) {
-      // TILE NAME
-      const tileName = this.generateTileName(tileCode);
-
-      // CLONE PREFAB
-      const tile = this.tilePrefab.clone(tileName);
-
-      // ASSIGN DECAL (FACE TEXTURE)
-      this.assignTileDecal(tileCode, tileName, tile);
-
-      // SPAWN IT?
-      tile.setEnabled(spawn);
-
-      return tile;
-    }
-    return null;
-  }
-
-  private generateTileName(tileCode: number) {
-    let tileName = "";
-    if (this._scene) {
-      // TILE NAME: tile-<tileCode>-<tileId>
-
-      // Example: tileCode = 1
-      // Name will be: "tile-1-0"
-      // Second one will be: "tile-1-1", etc.
-      let tileId = 0;
-      tileName = `tile-${tileCode}-${tileId}`;
-      while (this._scene.getMeshByName(tileName)) {
-        tileId++;
-        tileName = `tile-${tileCode}-${tileId}`;
-      }
-    }
-    return tileName;
-  }
-
-  /*** Helper function to spawn all tiles on table. */
-  private createAllTilesOnTable() {
-    if (this._scene && this.tilePrefab) {
-      const tileBoundingInfo =
-        this.tilePrefab.getBoundingInfo().boundingBox.extendSize;
-      const tileWidth = tileBoundingInfo.x;
-      const tileDepth = tileBoundingInfo.z; // Use the depth
-      const tilesPerRow = 10; // Assuming 10 tiles per row
-
-      const position = this.getTableTopLeftPosition();
-
-      Object.keys(tiles).forEach((key, index) => {
-        const rowNumber = Math.floor(index / tilesPerRow);
-        const columnNumber = index % tilesPerRow;
-
-        const tile = this.createTile(Number(key), true);
-        tile!.position = position.add(
-          new Vector3(
-            tileWidth * columnNumber,
-            0,
-            tileDepth * rowNumber // Adjusting the Z-coordinate
-          )
-        );
-      });
-    }
-  }
-
-  private getTableTopLeftPosition() {
-    return new Vector3(-44, 3, -40);
-  }
-  private createAllTextures(): Map<number, Texture> {
-    const textures = new Map<number, Texture>();
-    Object.keys(tiles).forEach((key) => {
-      const tileName = tiles[Number(key)];
-      const texture = new Texture(
-        `./tiles/textures/${tileName}.png`,
-        this._scene
-      );
-      textures.set(Number(key), texture);
-    });
-    return textures;
   }
 
   private createLight(scene: Scene) {
@@ -557,7 +285,7 @@ export class MahjongScene {
     });
 
     // PBR
-    const groundMat = this.createTableFabricMaterial();
+    const groundMat = createTableFabricMaterial(scene);
     table.material = groundMat;
     table.receiveShadows = true;
 
