@@ -10,8 +10,6 @@ import {
   PhysicsShapeType,
   PhysicsAggregate,
   CubeTexture,
-  Nullable,
-  AbstractMesh,
   DirectionalLight,
 } from "@babylonjs/core";
 
@@ -28,6 +26,7 @@ import { SceneLighting } from "./SceneLighting";
 import { SceneCamera } from "./SceneCamera";
 import { createTableFabricMaterial } from "./MahjongMaterials";
 import { SceneEvents } from "./SceneEvents";
+import { PostProcessingSetup } from "./PostProcessingSetup";
 
 export class MahjongScene {
   private _scene?: Scene;
@@ -51,8 +50,8 @@ export class MahjongScene {
     await this.setupTable(scene);
     this.setupCamera(scene, canvas);
     this.setupEventHandlers(scene);
+    this.setupPostProcessing(scene, this._camera!, engine);
     this.startRenderLoop(engine, scene);
-
     return { engine, scene };
   }
 
@@ -67,6 +66,14 @@ export class MahjongScene {
     return SceneLighting.createLight(scene);
   }
 
+  private setupPostProcessing(
+    scene: Scene,
+    camera: ArcRotateCamera,
+    engine: WebGPUEngine
+  ): void {
+    PostProcessingSetup.applyAllPostProcessing(scene, camera, engine);
+  }
+
   private setupEnvironment(scene: Scene): void {
     const envTex = CubeTexture.CreateFromPrefilteredData(
       "./env/fireplace.env",
@@ -76,12 +83,12 @@ export class MahjongScene {
     scene.createDefaultSkybox(envTex, true, 1000, 0.2);
   }
 
-  private setupShadows(scene: Scene, light: DirectionalLight): void {
+  private setupShadows(_scene: Scene, light: DirectionalLight): void {
     this.shadowGenerator = new ShadowGenerator(1024, light);
     this.shadowGenerator.usePoissonSampling = true;
   }
 
-  private async setupTileManager(scene: Scene): Promise<void> {
+  private async setupTileManager(_scene: Scene): Promise<void> {
     this.tileManager = new MahjongTileManager(
       this._scene!,
       this.shadowGenerator!
